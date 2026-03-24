@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MathKart - Jogo</title>
+  <link rel="stylesheet" href="jogo.css">
+</head>
+<body>
+  <main class="game-page">
+    <header class="topbar">
+      <h1>MathKart</h1>
+      <p id="difficultyTag" class="difficulty-tag">Dificuldade: Medio</p>
+      <a class="back-link" href="index.html">Voltar ao inicio</a>
+    </header>
+
+    <section class="scoreboard" aria-label="Placar">
+      <article id="playerCard0" class="player-card active">
+        <h2 id="playerName0">Jogador 1</h2>
+        <p class="score-label">Pontos</p>
+        <p id="playerScore0" class="score">0</p>
+        <p id="playerNitro0" class="nitro">Nitro: inativo</p>
+        <div class="power-slot">
+          <p id="playerPower0" class="power-label">Slot: vazio</p>
+          <button id="usePower0" type="button" class="use-power-btn">Usar poder</button>
+        </div>
+      </article>
+
+      <article id="playerCard1" class="player-card">
+        <h2 id="playerName1">Jogador 2</h2>
+        <p class="score-label">Pontos</p>
+        <p id="playerScore1" class="score">0</p>
+        <p id="playerNitro1" class="nitro">Nitro: inativo</p>
+        <div class="power-slot">
+          <p id="playerPower1" class="power-label">Slot: vazio</p>
+          <button id="usePower1" type="button" class="use-power-btn">Usar poder</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="track-wrap" aria-label="Pista de corrida">
+      <div class="track-lane">
+        <div class="lane-label" id="laneLabel0">Jogador 1</div>
+        <div class="finish-line"></div>
+        <div id="car0" class="car car-a" aria-hidden="true"></div>
+      </div>
+      <div class="track-lane">
+        <div class="lane-label" id="laneLabel1">Jogador 2</div>
+        <div class="finish-line"></div>
+        <div id="car1" class="car car-b" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <section id="questionBox" class="question-box">
+      <p id="turnInfo" class="turn-info">Vez de Jogador 1</p>
+      <div class="question-list">
+        <article class="question-item">
+          <p class="question-kind">Pergunta facil</p>
+          <p id="questionEasyText" class="question-text"></p>
+          <button id="answerEasyBtn" type="button" class="answer-kind-btn">Responder facil</button>
+        </article>
+        <article class="question-item hard">
+          <p class="question-kind">Pergunta dificil</p>
+          <p id="questionHardText" class="question-text"></p>
+          <button id="answerHardBtn" type="button" class="answer-kind-btn hard">Responder dificil</button>
+        </article>
+      </div>
+      <form id="answerForm" class="answer-form" novalidate>
+        <input id="answerInput" type="number" placeholder="Sua resposta" required>
+      </form>
+      <p id="lockInfo" class="lock-info"></p>
+      <p id="feedback" class="feedback" aria-live="polite"></p>
+      <button id="nextRaceBtn" class="next-race hidden" type="button">Nova corrida</button>
+    </section>
+
+    <section class="panels">
+      <article class="panel">
+        <h3>Historico de jogadas</h3>
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Turno</th>
+              <th>Jogador</th>
+              <th>Pergunta</th>
+              <th>Resposta</th>
+              <th>Resultado</th>
+              <th>Posicao</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </article>
+
+      <article class="panel">
+        <h3>Eventos da corrida</h3>
+        <ul id="eventList" class="event-list"></ul>
+      </article>
+    </section>
+  </main>
+
+  <script src="jogo.js"></script>
+</body>
+</html>

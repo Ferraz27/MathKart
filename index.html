@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MathKart - Configuracao</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <main class="setup-page">
+    <section class="setup-card">
+      <h1>MathKart 2 Jogadores</h1>
+      <p class="subtitle">Cada jogador responde uma pergunta de matematica por turno. Acertou? Ganha nitro e avanca mais rapido.</p>
+
+      <form id="setupForm" class="setup-form" novalidate>
+        <label for="player1">Nome do Jogador 1</label>
+        <input id="player1" name="player1" type="text" maxlength="20" required placeholder="Ex.: Ana">
+
+        <label for="player2">Nome do Jogador 2</label>
+        <input id="player2" name="player2" type="text" maxlength="20" required placeholder="Ex.: Bruno">
+
+        <label for="finishDistance">Distancia da corrida (casas)</label>
+        <input id="finishDistance" name="finishDistance" type="number" min="8" max="25" value="12" required>
+
+        <label for="difficulty">Dificuldade das perguntas</label>
+        <select id="difficulty" name="difficulty" required>
+          <option value="easy">Facil (soma e subtracao)</option>
+          <option value="medium" selected>Medio (soma, subtracao, multiplicacao e divisao)</option>
+          <option value="hard">Dificil (medio + exponenciacao e radiciacao)</option>
+        </select>
+
+        <button type="submit" class="start-btn">Iniciar Jogo</button>
+      </form>
+
+      <p id="setupError" class="error" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="setup.js"></script>
+</body>
+</html>

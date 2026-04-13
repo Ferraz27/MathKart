@@ -6,10 +6,10 @@ class Player {
     this.position = 0;
     this.nitroUntil = 0;
     this.superBoostUntil = 0;
+    this.correctBoostUntil = 0;
     this.slowedUntil = 0;
     this.easyHintUses = 0;
     this.powerInventory = [];
-    this.hardQuestionCooldown = 0;
     this.questionSlots = {
       easy: null,
       hard: null
@@ -32,6 +32,14 @@ class Player {
     return this.superBoostUntil > now;
   }
 
+  activateCorrectBoost(durationMs, now = Date.now()) {
+    this.correctBoostUntil = Math.max(this.correctBoostUntil, now + durationMs);
+  }
+
+  hasCorrectBoost(now = Date.now()) {
+    return this.correctBoostUntil > now;
+  }
+
   applyMud(durationMs, now = Date.now()) {
     this.slowedUntil = Math.max(this.slowedUntil, now + durationMs);
   }
@@ -52,10 +60,10 @@ class Player {
     this.position = 0;
     this.nitroUntil = 0;
     this.superBoostUntil = 0;
+    this.correctBoostUntil = 0;
     this.slowedUntil = 0;
     this.easyHintUses = 0;
     this.powerInventory = [];
-    this.hardQuestionCooldown = 0;
     this.questionSlots = {
       easy: null,
       hard: null
@@ -64,87 +72,339 @@ class Player {
 }
 
 class MathQuestion {
-  constructor(allowedKinds, difficulty = "medium") {
-    this.kind = "add";
+  constructor(difficulty = "medium") {
+    this.kind = "expression";
     this.difficulty = difficulty;
-    this.a = 0;
-    this.b = 0;
     this.result = 0;
     this.label = "";
-    this.generate(allowedKinds);
+    this.generate();
   }
 
   randomInt(min, max) {
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  isMediumWithThreeDigits() {
-    return this.difficulty === "medium" && Math.random() < 0.65;
+  randomIntFrom(min, max) {
+    if (max < min) {
+      return min;
+    }
+
+    return this.randomInt(min, max);
   }
 
-  generate(allowedKinds) {
-    const pool = Array.isArray(allowedKinds) && allowedKinds.length > 0 ? allowedKinds : ["add", "sub"];
-    this.kind = pool[Math.floor(Math.random() * pool.length)];
+  pick(items) {
+    return items[Math.floor(Math.random() * items.length)];
+  }
 
-    if (this.kind === "add") {
-      if (this.isMediumWithThreeDigits()) {
-        this.a = this.randomInt(100, 999);
-        this.b = this.randomInt(100, 999);
+  getSymbol(op) {
+    if (op === "*") {
+      return "x";
+    }
+
+    return op;
+  }
+
+  applyOperation(a, b, op) {
+    if (op === "+") {
+      return a + b;
+    }
+
+    if (op === "-") {
+      return a - b;
+    }
+
+    if (op === "*") {
+      return a * b;
+    }
+
+    return a / b;
+  }
+
+  createExactDivision(maxNumber) {
+    const divisor = this.randomIntFrom(2, Math.min(maxNumber, 12));
+    const quotient = this.randomIntFrom(1, Math.max(1, Math.floor(maxNumber / divisor)));
+    return {
+      a: divisor * quotient,
+      b: divisor,
+      result: quotient
+    };
+  }
+
+  createSingleOpQuestion(ops, maxNumber, allowNegative = false) {
+    const op = this.pick(ops);
+    let a = this.randomInt(0, maxNumber);
+    let b = this.randomInt(0, maxNumber);
+
+    if (op === "/") {
+      const exact = this.createExactDivision(maxNumber);
+      a = exact.a;
+      b = exact.b;
+      return {
+        label: `${a} / ${b} = ?`,
+        result: exact.result
+      };
+    }
+
+    if (op === "-" && !allowNegative && b > a) {
+      [a, b] = [b, a];
+    }
+
+    return {
+      label: `${a} ${this.getSymbol(op)} ${b} = ?`,
+      result: this.applyOperation(a, b, op)
+    };
+  }
+
+  evaluateWithoutParentheses(a, op1, b, op2, c) {
+    const highPriority = ["*", "/"];
+    if (highPriority.includes(op2) && !highPriority.includes(op1)) {
+      const right = this.applyOperation(b, c, op2);
+      return this.applyOperation(a, right, op1);
+    }
+
+    const left = this.applyOperation(a, b, op1);
+    return this.applyOperation(left, c, op2);
+  }
+
+  createEasyQuestion() {
+    // Easy: one immediate operation, numbers up to 20, only add/sub.
+    return this.createSingleOpQuestion(["+", "-"], 20, false);
+  }
+
+  createMediumQuestion() {
+    // Medium: add/sub/mul, numbers up to 50, no parentheses, up to 2 operations.
+    const useTwoOps = Math.random() < 0.55;
+    if (!useTwoOps) {
+      return this.createSingleOpQuestion(["+", "-", "*"], 50, false);
+    }
+
+    const a = this.randomInt(0, 50);
+    const b = this.randomInt(0, 50);
+    const c = this.randomInt(0, 50);
+    const op1 = this.pick(["+", "-", "*"]);
+    const op2 = this.pick(["+", "-", "*"]);
+    const result = this.evaluateWithoutParentheses(a, op1, b, op2, c);
+
+    return {
+      label: `${a} ${this.getSymbol(op1)} ${b} ${this.getSymbol(op2)} ${c} = ?`,
+      result
+    };
+  }
+
+  createHardQuestion() {
+    // Hard: mixed operations, up to 2 calculation stages, optional simple parentheses, numbers up to 100.
+    const useTwoOps = Math.random() < 0.75;
+    if (!useTwoOps) {
+      const op = this.pick(["+", "-", "*", "/"]);
+      if (op === "*") {
+        const oneDigitFactor = this.randomInt(1, 9);
+        const otherFactor = this.randomInt(0, 100);
+        const swap = Math.random() < 0.5;
+        const a = swap ? oneDigitFactor : otherFactor;
+        const b = swap ? otherFactor : oneDigitFactor;
+        return {
+          label: `${a} x ${b} = ?`,
+          result: a * b
+        };
+      }
+
+      if (op === "/") {
+        const exact = this.createExactDivision(100);
+        return {
+          label: `${exact.a} / ${exact.b} = ?`,
+          result: exact.result
+        };
+      }
+
+      let a = this.randomInt(0, 100);
+      let b = this.randomInt(0, 100);
+      if (op === "-" && b > a) {
+        [a, b] = [b, a];
+      }
+
+      return {
+        label: `${a} ${this.getSymbol(op)} ${b} = ?`,
+        result: this.applyOperation(a, b, op)
+      };
+    }
+
+    const op1 = this.pick(["+", "-", "*", "/"]);
+    const op2Pool = op1 === "*" ? ["+", "-", "/"] : ["+", "-", "*", "/"];
+    const op2 = this.pick(op2Pool);
+    const useParentheses = Math.random() < 0.5;
+
+    let a = this.randomInt(0, 100);
+    let b = this.randomInt(0, 100);
+    let c = this.randomInt(1, 100);
+
+    if (useParentheses) {
+      if (op1 === "/") {
+        const exact = this.createExactDivision(100);
+        a = exact.a;
+        b = exact.b;
+      } else if (op1 === "*") {
+        const oneDigitFactor = this.randomInt(1, 9);
+        const otherFactor = this.randomInt(0, 100);
+        const swap = Math.random() < 0.5;
+        a = swap ? oneDigitFactor : otherFactor;
+        b = swap ? otherFactor : oneDigitFactor;
+      } else if (op1 === "-" && b > a) {
+        [a, b] = [b, a];
+      }
+
+      const first = this.applyOperation(a, b, op1);
+      if (op2 === "/") {
+        const divisors = [];
+        const absFirst = Math.abs(first);
+        for (let i = 1; i <= Math.min(100, absFirst || 1); i += 1) {
+          if (absFirst % i === 0) {
+            divisors.push(i);
+          }
+        }
+        c = divisors.length > 0 ? this.pick(divisors) : 1;
+      }
+
+      const result = this.applyOperation(first, c, op2);
+      return {
+        label: `(${a} ${this.getSymbol(op1)} ${b}) ${this.getSymbol(op2)} ${c} = ?`,
+        result
+      };
+    }
+
+    if (op1 === "/") {
+      const exact = this.createExactDivision(100);
+      a = exact.a;
+      b = exact.b;
+    } else if (op1 === "*") {
+      const oneDigitFactor = this.randomInt(1, 9);
+      const otherFactor = this.randomInt(0, 100);
+      const swap = Math.random() < 0.5;
+      a = swap ? oneDigitFactor : otherFactor;
+      b = swap ? otherFactor : oneDigitFactor;
+    } else if (op1 === "-" && b > a) {
+      [a, b] = [b, a];
+    }
+
+    if (op2 === "/") {
+      c = this.randomIntFrom(2, 12);
+
+      if (op1 === "+" || op1 === "-") {
+        const quotient = this.randomIntFrom(1, Math.max(1, Math.floor(100 / c)));
+        b = quotient * c;
+        if (op1 === "-") {
+          a = this.randomIntFrom(b, 100);
+        }
+      } else if (op1 === "*") {
+        const factor = this.randomIntFrom(1, Math.max(1, Math.floor(100 / c)));
+        a = factor * c;
       } else {
-        this.a = Math.floor(Math.random() * 26);
-        this.b = Math.floor(Math.random() * 26);
+        b = this.randomIntFrom(2, 10);
+        c = this.randomIntFrom(2, 10);
+        const k = this.randomIntFrom(1, Math.max(1, Math.floor(100 / (b * c))));
+        a = b * c * k;
       }
-      this.result = this.a + this.b;
-      this.label = `${this.a} + ${this.b} = ?`;
-      return;
     }
 
-    if (this.kind === "sub") {
-      if (this.isMediumWithThreeDigits()) {
-        this.a = this.randomInt(100, 999);
-        this.b = this.randomInt(100, 999);
+    if (op2 === "*") {
+      const oneDigitFactor = this.randomInt(1, 9);
+      const swap = Math.random() < 0.5;
+      b = swap ? oneDigitFactor : b;
+      c = swap ? c : oneDigitFactor;
+    }
+
+    const result = this.evaluateWithoutParentheses(a, op1, b, op2, c);
+    return {
+      label: `${a} ${this.getSymbol(op1)} ${b} ${this.getSymbol(op2)} ${c} = ?`,
+      result
+    };
+  }
+
+  createVeryHardQuestion() {
+    // Very hard: exactly 3 stages, mixed ops including exact division, parentheses required.
+    const ops = ["+", "-", "*", "/"];
+    let op1 = this.pick(ops);
+    let op2 = this.pick(ops);
+    let op3 = this.pick(ops);
+
+    if (![op1, op2, op3].includes("/")) {
+      const indexToReplace = this.randomInt(1, 3);
+      if (indexToReplace === 1) {
+        op1 = "/";
+      } else if (indexToReplace === 2) {
+        op2 = "/";
       } else {
-        this.a = Math.floor(Math.random() * 31);
-        this.b = Math.floor(Math.random() * 31);
+        op3 = "/";
       }
+    }
 
-      if (this.difficulty !== "medium" && this.b > this.a) {
-        [this.a, this.b] = [this.b, this.a];
+    let a = this.randomInt(0, 100);
+    let b = this.randomInt(1, 100);
+    let c = this.randomInt(1, 100);
+    let d = this.randomInt(1, 100);
+
+    if (op1 === "/") {
+      const exact = this.createExactDivision(100);
+      a = exact.a;
+      b = exact.b;
+    } else if (op1 === "-" && b > a) {
+      [a, b] = [b, a];
+    }
+
+    let first = this.applyOperation(a, b, op1);
+    if (op2 === "/") {
+      const absFirst = Math.abs(first);
+      if (absFirst <= 1) {
+        c = 1;
+      } else {
+        const divisors = [];
+        for (let i = 1; i <= Math.min(100, absFirst); i += 1) {
+          if (absFirst % i === 0) {
+            divisors.push(i);
+          }
+        }
+        c = divisors.length > 0 ? this.pick(divisors) : 1;
       }
-
-      this.result = this.a - this.b;
-      this.label = `${this.a} - ${this.b} = ?`;
-      return;
     }
 
-    if (this.kind === "mul") {
-      this.a = 2 + Math.floor(Math.random() * 10);
-      this.b = 2 + Math.floor(Math.random() * 10);
-      this.result = this.a * this.b;
-      this.label = `${this.a} x ${this.b} = ?`;
-      return;
+    const second = this.applyOperation(first, c, op2);
+
+    if (op3 === "/") {
+      const absSecond = Math.abs(second);
+      if (absSecond <= 1) {
+        d = 1;
+      } else {
+        const divisors = [];
+        for (let i = 1; i <= Math.min(100, absSecond); i += 1) {
+          if (absSecond % i === 0) {
+            divisors.push(i);
+          }
+        }
+        d = divisors.length > 0 ? this.pick(divisors) : 1;
+      }
     }
 
-    if (this.kind === "div") {
-      this.b = this.difficulty === "medium" ? this.randomInt(2, 25) : 2 + Math.floor(Math.random() * 9);
-      this.result = this.isMediumWithThreeDigits() ? this.randomInt(100, 999) : 2 + Math.floor(Math.random() * 12);
-      this.a = this.b * this.result;
-      this.label = `${this.a} / ${this.b} = ?`;
-      return;
+    const result = this.applyOperation(second, d, op3);
+    return {
+      label: `((${a} ${this.getSymbol(op1)} ${b}) ${this.getSymbol(op2)} ${c}) ${this.getSymbol(op3)} ${d} = ?`,
+      result
+    };
+  }
+
+  generate() {
+    let question;
+
+    if (this.difficulty === "easy") {
+      question = this.createEasyQuestion();
+    } else if (this.difficulty === "medium") {
+      question = this.createMediumQuestion();
+    } else if (this.difficulty === "hard") {
+      question = this.createHardQuestion();
+    } else {
+      question = this.createVeryHardQuestion();
     }
 
-    if (this.kind === "pow") {
-      this.a = 2 + Math.floor(Math.random() * 7);
-      this.b = 2 + Math.floor(Math.random() * 3);
-      this.result = this.a ** this.b;
-      this.label = `${this.a} ^ ${this.b} = ?`;
-      return;
-    }
-
-    const rootBase = 2 + Math.floor(Math.random() * 12);
-    this.a = rootBase * rootBase;
-    this.result = rootBase;
-    this.label = `raiz(${this.a}) = ?`;
+    this.result = question.result;
+    this.label = question.label;
   }
 
   toString() {
@@ -169,17 +429,21 @@ class RaceGame {
     this.answerUnlockTimeoutId = null;
     this.answerUnlockIntervalId = null;
     this.isAnswerLocked = false;
+    this.sharedHardQuestion = null;
+    this.sharedHardCooldownTurns = 0;
 
     this.speeds = {
       answering: 7,
       waiting: 10,
-      superBoost: 12
+      superBoost: 12,
+      correctBoost: 13
     };
 
     this.powerConfig = {
       superBoostMs: 5000,
       mudMs: 5000,
-      easyHintCount: 3
+      easyHintCount: 3,
+      correctBoostMs: 3000
     };
 
     this.el = {
@@ -343,7 +607,7 @@ class RaceGame {
       return;
     }
 
-    const hardOnCooldown = this.currentPlayer.hardQuestionCooldown > 0;
+    const hardOnCooldown = this.sharedHardCooldownTurns > 0;
     this.el.answerEasyBtn.disabled = this.isAnswerLocked;
     this.el.answerHardBtn.disabled = this.isAnswerLocked || hardOnCooldown;
   }
@@ -354,6 +618,9 @@ class RaceGame {
       const states = [];
       if (player.hasSuperBoost(now)) {
         states.push("Super boost");
+      }
+      if (player.hasCorrectBoost(now)) {
+        states.push("Acerto: 13 km/h");
       }
       if (player.isSlowed(now)) {
         states.push("Lama");
@@ -374,6 +641,10 @@ class RaceGame {
 
     if (player.hasSuperBoost(now)) {
       speed = Math.max(speed, this.speeds.superBoost);
+    }
+
+    if (player.hasCorrectBoost(now)) {
+      speed = Math.max(speed, this.speeds.correctBoost);
     }
 
     if (player.isSlowed(now)) {
@@ -442,38 +713,29 @@ class RaceGame {
     return "Medio";
   }
 
-  getQuestionPoolsByDifficulty() {
-    if (this.difficulty === "easy") {
-      return {
-        easy: ["add"],
-        hard: ["sub"]
-      };
+  getQuestionDifficulty(tier) {
+    const levelOrder = ["easy", "medium", "hard", "veryHard"];
+    const currentIndex = Math.max(0, levelOrder.indexOf(this.difficulty));
+
+    if (tier === "hard") {
+      return levelOrder[Math.min(currentIndex + 1, levelOrder.length - 1)];
     }
 
-    if (this.difficulty === "hard") {
-      return {
-        easy: ["mul", "div"],
-        hard: ["pow", "root"]
-      };
-    }
-
-    return {
-      easy: ["add", "sub"],
-      hard: ["mul", "div"]
-    };
+    return levelOrder[currentIndex];
   }
 
   initializeQuestionSlots() {
     this.players.forEach((player) => {
       player.questionSlots.easy = this.createQuestion("easy");
-      player.questionSlots.hard = this.createQuestion("hard");
     });
+
+    this.sharedHardQuestion = this.createQuestion("hard");
+    this.sharedHardCooldownTurns = 0;
   }
 
   createQuestion(tier) {
-    const pools = this.getQuestionPoolsByDifficulty();
-    const targetPool = tier === "hard" ? pools.hard : pools.easy;
-    return new MathQuestion(targetPool, this.difficulty);
+    const questionDifficulty = this.getQuestionDifficulty(tier);
+    return new MathQuestion(questionDifficulty);
   }
 
   getEasyHintText(player, question) {
@@ -493,12 +755,12 @@ class RaceGame {
   renderCurrentPlayerQuestions() {
     const player = this.currentPlayer;
     const easyQ = player.questionSlots.easy;
-    const hardQ = player.questionSlots.hard;
-    const hardCooldown = player.hardQuestionCooldown;
+    const hardQ = this.sharedHardQuestion;
+    const hardCooldown = this.sharedHardCooldownTurns;
 
     this.el.questionEasyText.textContent = `${easyQ.toString()}${this.getEasyHintText(player, easyQ)}`;
     this.el.questionHardText.textContent = hardCooldown > 0
-      ? `${hardQ.toString()} (Cooldown: ${hardCooldown} pergunta(s))`
+      ? `${hardQ.toString()} (Cooldown global: ${hardCooldown} rodada(s))`
       : hardQ.toString();
     this.el.answerInput.value = "";
     this.syncQuestionButtonsState();
@@ -611,8 +873,8 @@ class RaceGame {
     }
 
     const player = this.currentPlayer;
-    if (questionTier === "hard" && player.hardQuestionCooldown > 0) {
-      this.showFeedback(`Pergunta dificil em cooldown: faltam ${player.hardQuestionCooldown} pergunta(s).`, false);
+    if (questionTier === "hard" && this.sharedHardCooldownTurns > 0) {
+      this.showFeedback(`Pergunta dificil em cooldown global: faltam ${this.sharedHardCooldownTurns} rodada(s).`, false);
       return;
     }
 
@@ -629,18 +891,22 @@ class RaceGame {
     }
 
     const now = Date.now();
-    const activeQuestion = player.questionSlots[questionTier];
+    const activeQuestion = questionTier === "hard" ? this.sharedHardQuestion : player.questionSlots.easy;
     const isCorrect = activeQuestion.check(answer);
     let bonusMessage = "";
 
     if (isCorrect) {
+      player.activateCorrectBoost(this.powerConfig.correctBoostMs, now);
+
       if (questionTier === "hard") {
         bonusMessage = this.storeRandomPower(player);
+        this.sharedHardCooldownTurns = 4;
+        this.sharedHardQuestion = this.createQuestion("hard");
         this.showFeedback(`Resposta correta! ${bonusMessage}`, true);
-        this.addEvent(`${player.name} acertou a pergunta dificil e ganhou poder no slot.`);
+        this.addEvent(`${player.name} acertou a pergunta dificil compartilhada. Cooldown global de 4 rodadas ativado.`);
       } else {
-        this.showFeedback(`Resposta correta! ${player.name} acertou a pergunta facil.`, true);
-        this.addEvent(`${player.name} acertou a pergunta facil.`);
+        this.showFeedback(`Resposta correta! ${player.name} acertou a pergunta comum.`, true);
+        this.addEvent(`${player.name} acertou a pergunta comum.`);
       }
     } else {
       this.showFeedback(`Resposta incorreta. A resposta era ${activeQuestion.result}.`, false);
@@ -654,22 +920,22 @@ class RaceGame {
       }
     }
 
-    if (questionTier === "hard") {
-      player.hardQuestionCooldown = 5;
-    } else if (player.hardQuestionCooldown > 0) {
-      player.hardQuestionCooldown -= 1;
+    if (questionTier !== "hard" && this.sharedHardCooldownTurns > 0) {
+      this.sharedHardCooldownTurns -= 1;
     }
 
     this.appendHistoryRow({
       turn: this.turnCount,
       playerName: player.name,
-      question: `${questionTier === "easy" ? "[Facil]" : "[Dificil]"} ${activeQuestion.toString()}`,
+      question: `${questionTier === "easy" ? "[Comum]" : "[Dificil]"} ${activeQuestion.toString()}`,
       answer: String(answer),
       resultText: isCorrect ? "Acerto" : "Erro",
       position: `${player.position.toFixed(1)} m / ${this.finishDistance} m`
     });
 
-    player.questionSlots[questionTier] = this.createQuestion(questionTier);
+    if (questionTier === "easy") {
+      player.questionSlots.easy = this.createQuestion("easy");
+    }
 
     this.updateAllUI();
 
@@ -776,7 +1042,7 @@ function getGameConfigFromQuery() {
   return {
     player1: p1 || "Jogador 1",
     player2: p2 || "Jogador 2",
-    finishDistance: Number.isInteger(d) && d >= 8 && d <= 25 ? d * 30 : 360,
+    finishDistance: Number.isInteger(d) && d >= 8 && d <= 100 ? d * 30 : 360,
     difficulty: validDifficulty
   };
 }

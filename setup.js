@@ -27,8 +27,8 @@ class SetupController {
       return;
     }
 
-    if (!Number.isInteger(finishDistance) || finishDistance < 8 || finishDistance > 25) {
-      this.showError("A distancia deve estar entre 8 e 25 casas.");
+    if (!Number.isInteger(finishDistance) || finishDistance < 8 || finishDistance > 100) {
+      this.showError("A distancia deve estar entre 8 e 100 casas.");
       return;
     }
 
